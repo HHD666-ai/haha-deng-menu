@@ -68,7 +68,7 @@ export default function App() {
         setIsSpinning(false);
         const finalFood = filteredList[randomIndex];
         // Fetch AI comment
-        getHardenCommentary(finalFood).then(comment => setHardenComment(comment));
+        getHardenCommentary(finalFood).then((comment: string) => setHardenComment(comment));
       }
     }, 100);
   };
