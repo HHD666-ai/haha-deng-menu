@@ -68,7 +68,9 @@ export default function App() {
         setIsSpinning(false);
         const finalFood = filteredList[randomIndex];
         // Fetch AI comment
-        getHardenCommentary(finalFood).then((comment: string) => setHardenComment(comment));
+        // ✅ 修改后的写法 (传入 name 和 price)
+// 注意：确保 finalFood 对象里有 price 属性，如果没有可以用 || 0 兜底
+getHardenCommentary(finalFood.name, finalFood.price).then((comment: string) => setHardenComment(comment));
       }
     }, 100);
   };
