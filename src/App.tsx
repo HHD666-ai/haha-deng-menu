@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Dice5, Heart, Search, Share2, Sparkles, UtensilsCrossed, X } from 'lucide-react';
 import { BUDGETS, CATEGORIES, MENU } from './constants';
+import heroImage from './assets/northeast-feast-hero.png';
 import type { BudgetLevel, FoodItem } from './menuTypes';
 
 type BudgetFilter = BudgetLevel | '全部';
@@ -61,6 +62,17 @@ export default function App() {
         </div>
         <button onClick={share} aria-label="分享菜单" className="mt-1 rounded-full border border-amber-100/15 bg-white/5 p-3 text-amber-100 transition hover:bg-white/10"><Share2 size={19} /></button>
       </header>
+
+      <section className="relative mb-7 min-h-64 overflow-hidden rounded-[2rem] border border-amber-100/15 bg-[#21130f] shadow-2xl shadow-black/30 sm:min-h-80">
+        <img src={heroImage} alt="锅包肉和东北炖菜" className="absolute inset-0 h-full w-full object-cover object-center" />
+        <div className="absolute inset-0 bg-gradient-to-r from-[#160f0d]/95 via-[#160f0d]/60 to-transparent" />
+        <div className="relative flex min-h-64 max-w-sm flex-col justify-end p-6 sm:min-h-80 sm:p-9">
+          <p className="mb-2 text-xs font-bold tracking-[.22em] text-amber-300">TODAY'S TABLE</p>
+          <h2 className="font-serif text-3xl font-black leading-tight text-[#fff6e9] sm:text-4xl">今天这顿，<br />吃点好的。</h2>
+          <p className="mt-3 text-sm leading-6 text-stone-200">锅包肉的酥香，铁锅炖菜的热乎。让好好吃饭，从今天开始。</p>
+          <button onClick={chooseRandom} className="mt-5 w-fit rounded-full bg-amber-300 px-4 py-2 text-sm font-black text-[#30190f] transition hover:bg-amber-200">来一份今日推荐</button>
+        </div>
+      </section>
 
       <section className="mb-7 rounded-3xl border border-amber-100/10 bg-[#241713]/90 p-4 shadow-2xl shadow-black/25 sm:p-6">
         <label className="flex items-center gap-3 rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-stone-300 focus-within:border-amber-300/60">
