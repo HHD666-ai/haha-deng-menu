@@ -45,9 +45,9 @@ export default function App() {
 
   const toggleFavorite = (id: string) => setFavorites((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id]);
   const share = async () => {
-    const text = pick ? `今天吃「${pick.name}」：${pick.description}` : '打开哈哈邓菜单，今天吃什么交给它。';
+    const text = pick ? `今天吃「${pick.name}」：${pick.description}` : '打开哈哈登菜单，今天吃什么交给它。';
     try {
-      if (navigator.share) await navigator.share({ title: '哈哈邓的菜单', text, url: window.location.href });
+      if (navigator.share) await navigator.share({ title: '哈哈登的菜单', text, url: window.location.href });
       else { await navigator.clipboard.writeText(`${text} ${window.location.href}`); setToast('菜单链接已复制，发给饭搭子吧。'); }
     } catch { /* 用户取消分享时无需提示 */ }
   };
@@ -57,7 +57,7 @@ export default function App() {
       <header className="mb-9 flex items-start justify-between gap-4">
         <div>
           <p className="mb-2 text-xs font-bold tracking-[.28em] text-amber-300/80">NORTH CHINA COMFORT FOOD</p>
-          <h1 className="font-serif text-4xl font-black tracking-tight text-[#fff6e9] sm:text-6xl">哈哈邓的菜单</h1>
+          <h1 className="font-serif text-4xl font-black tracking-tight text-[#fff6e9] sm:text-6xl">哈哈登的菜单</h1>
           <p className="mt-3 max-w-lg text-sm leading-6 text-stone-300 sm:text-base">不纠结吃什么。按预算、口味和心情筛一筛，给今天这顿饭一个靠谱答案。</p>
         </div>
         <button onClick={share} aria-label="分享菜单" className="mt-1 rounded-full border border-amber-100/15 bg-white/5 p-3 text-amber-100 transition hover:bg-white/10"><Share2 size={19} /></button>
