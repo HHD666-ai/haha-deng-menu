@@ -1,13 +1,4 @@
-// 定义具体的值（给 App.tsx 用的）
-export const BudgetLevel = {
-  POOR: '穷鬼套餐',
-  VALUE: '性价比',
-  RICH: '有钱任性',
-  ALL: 'ALL'
-} as const;
-
-// 从上面的值自动生成类型（给 constants.ts 用的）
-export type BudgetLevel = typeof BudgetLevel[keyof typeof BudgetLevel];
+export type BudgetLevel = '平价' | '超值' | '犒赏';
 
 export interface FoodItem {
   id: string;
@@ -16,5 +7,6 @@ export interface FoodItem {
   budget: BudgetLevel;
   emoji: string;
   description: string;
-  category?: string;
+  category: '招牌硬菜' | '下饭热炒' | '主食汤面' | '凉菜小食';
+  tags: string[];
 }

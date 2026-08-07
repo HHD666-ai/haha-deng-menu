@@ -1,3 +1,13 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+:root { font-family: Inter, "PingFang SC", "Microsoft YaHei", sans-serif; color: #fff7ed; background: #160f0d; }
+* { box-sizing: border-box; }
+body { margin: 0; min-width: 320px; background: #160f0d; }
+button, input { font: inherit; }
+button { -webkit-tap-highlight-color: transparent; }
+.paper { background-image: radial-gradient(rgba(251, 191, 36, .09) 1px, transparent 1px); background-size: 18px 18px; }
+.dish-card { transition: transform .2s ease, border-color .2s ease, box-shadow .2s ease; }
+.dish-card:hover { transform: translateY(-3px); }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; } }

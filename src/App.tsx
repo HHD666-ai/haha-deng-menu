@@ -1,353 +1,104 @@
-import React, { useState, useEffect } from 'react';
-import { 
-  Menu, Utensils, Zap, Crown, RefreshCw, 
-  Share2, ArrowRight, Gamepad2, Info, MessageSquare, Flame 
-} from 'lucide-react';
-import { BudgetLevel, type FoodItem } from './menuTypes';
-import { NORTHERN_FOOD_MENU, HARDEN_QUOTES } from './constants';
-import { getHardenCommentary } from './services/geminiService';
-import InstallationGuide from './components/InstallationGuide';
-import FeedbackModal from './components/FeedbackModal';
+import { useEffect, useMemo, useState } from 'react';
+import { Dice5, Heart, Search, Share2, Sparkles, UtensilsCrossed, X } from 'lucide-react';
+import { BUDGETS, CATEGORIES, MENU } from './constants';
+import type { BudgetLevel, FoodItem } from './menuTypes';
 
-const QQ_NUMBER = "1056115760";
+type BudgetFilter = BudgetLevel | '全部';
+type CategoryFilter = FoodItem['category'] | '全部';
 
-// --- Components ---
-
-const FilterButton: React.FC<{ children: React.ReactNode, active: boolean, onClick: () => void, emoji: string }> = ({ children, active, onClick, emoji }) => (
-  <button 
-    onClick={onClick}
-    className={`flex-1 py-2 px-1 rounded-lg text-sm font-bold transition-all border ${
-      active 
-        ? 'bg-rockets-red border-rockets-red text-white shadow-lg shadow-red-900/40 transform scale-105' 
-        : 'bg-zinc-800 border-zinc-700 text-gray-400 hover:border-gray-500 hover:text-white'
-    }`}
-  >
-    <div className="text-lg mb-1">{emoji}</div>
-    {children}
-  </button>
-);
+const budgetStyle: Record<BudgetLevel, string> = {
+  平价: 'bg-emerald-400/15 text-emerald-200 ring-emerald-300/25',
+  超值: 'bg-amber-400/15 text-amber-200 ring-amber-300/25',
+  犒赏: 'bg-rose-400/15 text-rose-200 ring-rose-300/25',
+};
 
 export default function App() {
-  const [hasEntered, setHasEntered] = useState(false);
-  const [selectedBudget, setSelectedBudget] = useState<BudgetLevel | 'ALL'>('ALL');
-  const [generatedFood, setGeneratedFood] = useState<FoodItem | null>(null);
-  const [isSpinning, setIsSpinning] = useState(false);
-  const [hardenComment, setHardenComment] = useState<string>("");
-  const [isInstallModalOpen, setInstallModalOpen] = useState(false);
-  const [isFeedbackModalOpen, setFeedbackModalOpen] = useState(false);
-  const [copyFeedback, setCopyFeedback] = useState("复制");
+  const [budget, setBudget] = useState<BudgetFilter>('全部');
+  const [category, setCategory] = useState<CategoryFilter>('全部');
+  const [query, setQuery] = useState('');
+  const [pick, setPick] = useState<FoodItem | null>(null);
+  const [favorites, setFavorites] = useState<string[]>(() => JSON.parse(localStorage.getItem('haha-deng-favorites') ?? '[]'));
+  const [showFavorites, setShowFavorites] = useState(false);
+  const [toast, setToast] = useState('');
 
-  // Rotating quote
-  const [quoteIndex, setQuoteIndex] = useState(0);
-
+  useEffect(() => localStorage.setItem('haha-deng-favorites', JSON.stringify(favorites)), [favorites]);
   useEffect(() => {
-    const interval = setInterval(() => {
-      setQuoteIndex((prev) => (prev + 1) % HARDEN_QUOTES.length);
-    }, 4000);
-    return () => clearInterval(interval);
-  }, []);
+    if (!toast) return;
+    const timer = window.setTimeout(() => setToast(''), 2200);
+    return () => window.clearTimeout(timer);
+  }, [toast]);
 
-  const handleRandomize = async () => {
-    setIsSpinning(true);
-    setHardenComment("");
-    
-    // Filter
-    const filteredList = selectedBudget === 'ALL' 
-      ? NORTHERN_FOOD_MENU 
-      : NORTHERN_FOOD_MENU.filter(item => item.budget === selectedBudget);
+  const dishes = useMemo(() => MENU.filter((dish) => {
+    const matchBudget = budget === '全部' || dish.budget === budget;
+    const matchCategory = category === '全部' || dish.category === category;
+    const needle = query.trim().toLowerCase();
+    const matchQuery = !needle || [dish.name, dish.description, dish.category, ...dish.tags].join(' ').toLowerCase().includes(needle);
+    const matchFavorite = !showFavorites || favorites.includes(dish.id);
+    return matchBudget && matchCategory && matchQuery && matchFavorite;
+  }), [budget, category, favorites, query, showFavorites]);
 
-    // Roulette Animation
-    let count = 0;
-    const maxCount = 12;
-    const spinInterval = setInterval(() => {
-      const randomIndex = Math.floor(Math.random() * filteredList.length);
-      setGeneratedFood(filteredList[randomIndex]);
-      count++;
-      if (count >= maxCount) {
-        clearInterval(spinInterval);
-        setIsSpinning(false);
-        const finalFood = filteredList[randomIndex];
-        // Fetch AI comment
-        // ✅ 修改后的写法 (传入 name 和 price)
-// 注意：确保 finalFood 对象里有 price 属性，如果没有可以用 || 0 兜底
-getHardenCommentary(finalFood.name, finalFood.price).then((comment: string) => setHardenComment(comment));
-      }
-    }, 100);
+  const chooseRandom = () => {
+    if (!dishes.length) return setToast('当前筛选下没有菜品，换个条件试试吧。');
+    setPick(dishes[Math.floor(Math.random() * dishes.length)]);
   };
 
-  const handleShare = async () => {
-    const text = `哈登大厨推荐我今天吃：${generatedFood?.name || '空气'}！快来试试：[网页链接]`;
-    if (navigator.share) {
-      try {
-        await navigator.share({
-          title: '哈哈登的菜单',
-          text: text,
-          url: window.location.href,
-        });
-      } catch (err) {
-        console.log('Share canceled');
-      }
-    } else {
-      navigator.clipboard.writeText(text + " " + window.location.href);
-      alert("链接已复制，发给兄弟们！");
-    }
+  const toggleFavorite = (id: string) => setFavorites((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id]);
+  const share = async () => {
+    const text = pick ? `今天吃「${pick.name}」：${pick.description}` : '打开哈哈邓菜单，今天吃什么交给它。';
+    try {
+      if (navigator.share) await navigator.share({ title: '哈哈邓的菜单', text, url: window.location.href });
+      else { await navigator.clipboard.writeText(`${text} ${window.location.href}`); setToast('菜单链接已复制，发给饭搭子吧。'); }
+    } catch { /* 用户取消分享时无需提示 */ }
   };
 
-  const copyQQ = () => {
-    navigator.clipboard.writeText(QQ_NUMBER);
-    setCopyFeedback("已复制!");
-    setTimeout(() => setCopyFeedback("复制"), 2000);
-  };
-
-  // --- Landing Screen (Home Page) ---
-  if (!hasEntered) {
-    return (
-      <div className="fixed inset-0 bg-black text-white flex flex-col items-center justify-center overflow-hidden">
-        {/* Background FX */}
-        <div className="absolute inset-0 basketball-pattern opacity-20"></div>
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-rockets-red rounded-full filter blur-[150px] opacity-20 animate-pulse"></div>
-
-        <div className="z-10 text-center space-y-6 p-6 max-w-md w-full animate-in fade-in zoom-in duration-500">
-          <div className="relative inline-block mb-4">
-             <div className="w-24 h-24 bg-gradient-to-tr from-rockets-red to-black rounded-full flex items-center justify-center border-4 border-white shadow-[0_0_30px_rgba(206,17,65,0.6)] mx-auto">
-                <span className="font-display italic text-4xl font-bold">13</span>
-             </div>
-             <div className="absolute -top-2 -right-4 rotate-12 bg-yellow-400 text-black font-bold px-2 py-0.5 rounded text-xs">MVP</div>
-          </div>
-          
-          <div>
-            <h1 className="text-6xl font-black italic tracking-tighter font-display mb-2">
-              <span className="text-white">HAHA</span>
-              <span className="text-rockets-red"> DENG</span>
-            </h1>
-            <p className="text-gray-400 text-lg font-medium tracking-wide uppercase">Northern Food Menu</p>
-          </div>
-          
-          <div className="h-16 flex items-center justify-center">
-            <p className="text-sm italic text-gray-500">"{HARDEN_QUOTES[quoteIndex]}"</p>
-          </div>
-
-          <button 
-            onClick={() => setHasEntered(true)}
-            className="group w-full bg-rockets-red hover:bg-red-600 text-white text-xl font-bold py-5 rounded-none skew-x-[-10deg] shadow-[5px_5px_0px_0px_rgba(255,255,255,0.2)] hover:shadow-[2px_2px_0px_0px_rgba(255,255,255,0.2)] hover:translate-x-[3px] hover:translate-y-[3px] transition-all flex items-center justify-center gap-3 mt-8 border border-red-500"
-          >
-            <span className="skew-x-[10deg] flex items-center gap-2">
-               进入球场 <ArrowRight className="group-hover:translate-x-1 transition-transform"/>
-            </span>
-          </button>
-          
-          <div className="pt-8 text-xs text-gray-600 font-mono">
-             DESIGNED FOR NORTHERN STOMACHS
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // --- Main App Screen ---
-  return (
-    <div className="min-h-screen bg-[#121212] text-white flex flex-col md:flex-row relative">
-      
-      {/* --- Left Sidebar (Desktop) --- */}
-      <div className="hidden md:flex flex-col justify-between w-80 bg-zinc-950 border-r border-zinc-900 p-8 sticky top-0 h-screen z-10">
+  return <main className="min-h-screen paper bg-[#160f0d] text-stone-100">
+    <section className="mx-auto max-w-6xl px-4 pb-16 pt-6 sm:px-8 sm:pt-10">
+      <header className="mb-9 flex items-start justify-between gap-4">
         <div>
-          <h2 className="text-5xl font-display font-black italic text-zinc-800 mb-8 select-none">H-TOWN</h2>
-          <div className="space-y-6">
-            <div className="p-4 bg-zinc-900/50 border-l-4 border-rockets-red rounded-r">
-              <h3 className="font-bold text-rockets-red mb-1">吃饭战术</h3>
-              <p className="text-sm text-gray-400">就像后撤步一样，吃饭也要找准节奏。如果不知道吃什么，就让哈登帮你造个犯规。</p>
-            </div>
-            <div className="p-4 bg-zinc-900/50 border-l-4 border-white rounded-r">
-               <h3 className="font-bold text-white mb-1">北方胃</h3>
-               <p className="text-sm text-gray-400">拒绝精致过头，主要就是碳水+硬菜。量大管饱才是硬道理。</p>
-            </div>
-          </div>
+          <p className="mb-2 text-xs font-bold tracking-[.28em] text-amber-300/80">NORTH CHINA COMFORT FOOD</p>
+          <h1 className="font-serif text-4xl font-black tracking-tight text-[#fff6e9] sm:text-6xl">哈哈邓的菜单</h1>
+          <p className="mt-3 max-w-lg text-sm leading-6 text-stone-300 sm:text-base">不纠结吃什么。按预算、口味和心情筛一筛，给今天这顿饭一个靠谱答案。</p>
         </div>
-        <div className="opacity-10 pointer-events-none select-none">
-           <Crown size={200} />
-        </div>
+        <button onClick={share} aria-label="分享菜单" className="mt-1 rounded-full border border-amber-100/15 bg-white/5 p-3 text-amber-100 transition hover:bg-white/10"><Share2 size={19} /></button>
+      </header>
+
+      <section className="mb-7 rounded-3xl border border-amber-100/10 bg-[#241713]/90 p-4 shadow-2xl shadow-black/25 sm:p-6">
+        <label className="flex items-center gap-3 rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-stone-300 focus-within:border-amber-300/60">
+          <Search size={18} className="text-amber-300" />
+          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜菜名、口味或标签，例如：麻辣、暖胃" className="w-full bg-transparent text-sm outline-none placeholder:text-stone-500" />
+          {query && <button onClick={() => setQuery('')} aria-label="清除搜索"><X size={16} /></button>}
+        </label>
+        <FilterRow label="预算" values={BUDGETS} value={budget} onChange={setBudget} />
+        <FilterRow label="分类" values={CATEGORIES} value={category} onChange={setCategory} />
+      </section>
+
+      <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+        <p className="text-sm text-stone-400">为你找到 <strong className="text-amber-200">{dishes.length}</strong> 道合胃口的菜</p>
+        <button onClick={() => setShowFavorites((value) => !value)} className={`inline-flex items-center gap-2 rounded-full border px-3 py-2 text-sm transition ${showFavorites ? 'border-rose-300/50 bg-rose-400/15 text-rose-100' : 'border-white/10 bg-white/5 text-stone-300 hover:bg-white/10'}`}><Heart size={16} fill={showFavorites ? 'currentColor' : 'none'} /> 收藏 {favorites.length ? `(${favorites.length})` : ''}</button>
       </div>
 
-      {/* --- Center Content (Mobile & Desktop) --- */}
-      <div className="flex-1 flex flex-col max-w-2xl mx-auto w-full relative min-h-screen">
-        
-        {/* Header */}
-        <header className="px-4 py-3 flex items-center justify-between bg-zinc-950/80 backdrop-blur-md sticky top-0 z-30 border-b border-zinc-900">
-          <div className="flex items-center gap-3" onClick={() => setHasEntered(false)}>
-            <div className="w-8 h-8 bg-rockets-red flex items-center justify-center font-display font-bold italic text-white skew-x-[-10deg] cursor-pointer">
-               <span className="skew-x-[10deg]">13</span>
-            </div>
-            <span className="font-bold text-lg tracking-tight">哈哈登的菜单</span>
-          </div>
-          <button onClick={handleShare} className="p-2 text-gray-400 hover:text-white transition-colors bg-zinc-900 rounded-full">
-            <Share2 size={18}/>
-          </button>
-        </header>
+      {dishes.length ? <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {dishes.map((dish) => <DishCard key={dish.id} dish={dish} favorite={favorites.includes(dish.id)} onFavorite={() => toggleFavorite(dish.id)} onSelect={() => setPick(dish)} />)}
+      </div> : <div className="rounded-3xl border border-dashed border-amber-100/20 bg-black/15 px-6 py-20 text-center text-stone-400"><UtensilsCrossed className="mx-auto mb-4 text-amber-300/70" size={34} /><p className="font-semibold text-stone-200">这套筛选没有匹配的菜</p><button className="mt-4 text-sm text-amber-300 underline underline-offset-4" onClick={() => { setBudget('全部'); setCategory('全部'); setQuery(''); setShowFavorites(false); }}>清空筛选</button></div>}
+    </section>
 
-        <main className="flex-1 p-4 pb-40 space-y-6 flex flex-col">
-          
-          {/* Filters */}
-          <div className="space-y-2">
-            <div className="flex justify-between items-baseline px-1">
-               <span className="text-gray-500 text-xs font-bold uppercase tracking-widest">Cap Space (预算)</span>
-            </div>
-            <div className="flex gap-2 w-full">
-              <FilterButton active={selectedBudget === 'ALL'} onClick={() => setSelectedBudget('ALL')} emoji="🏀">全部</FilterButton>
-              <FilterButton active={selectedBudget === BudgetLevel.POOR} onClick={() => setSelectedBudget(BudgetLevel.POOR)} emoji="💸">穷鬼</FilterButton>
-              <FilterButton active={selectedBudget === BudgetLevel.VALUE} onClick={() => setSelectedBudget(BudgetLevel.VALUE)} emoji="⚖️">性价比</FilterButton>
-              <FilterButton active={selectedBudget === BudgetLevel.RICH} onClick={() => setSelectedBudget(BudgetLevel.RICH)} emoji="💎">有钱</FilterButton>
-            </div>
-          </div>
+    <button onClick={chooseRandom} className="fixed bottom-5 left-1/2 z-20 inline-flex -translate-x-1/2 items-center gap-2 whitespace-nowrap rounded-full bg-amber-300 px-5 py-3 text-sm font-black text-[#30190f] shadow-xl shadow-black/40 transition hover:bg-amber-200 active:scale-95"><Dice5 size={18} /> 今天吃什么？帮我选</button>
+    {pick && <PickModal dish={pick} favorite={favorites.includes(pick.id)} onClose={() => setPick(null)} onFavorite={() => toggleFavorite(pick.id)} onAgain={chooseRandom} />}
+    {toast && <div role="status" className="fixed bottom-20 left-1/2 z-30 -translate-x-1/2 rounded-full bg-stone-100 px-4 py-2 text-sm font-semibold text-stone-900 shadow-xl">{toast}</div>}
+  </main>;
+}
 
-          {/* Main Card Area */}
-          <div className="flex-1 flex flex-col justify-center min-h-[360px]">
-            {generatedFood ? (
-              <div className="animate-in zoom-in duration-300">
-                <div className={`w-full bg-zinc-900 border-2 ${isSpinning ? 'border-yellow-500' : 'border-rockets-red'} rounded-2xl p-6 shadow-2xl relative overflow-hidden group`}>
-                  
-                  {/* Decorative stripe */}
-                  <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-bl from-rockets-red/20 to-transparent rounded-bl-full -mr-8 -mt-8"></div>
+function FilterRow<T extends string>({ label, values, value, onChange }: { label: string; values: readonly T[]; value: T; onChange: (value: T) => void }) {
+  return <div className="mt-5 flex flex-wrap items-center gap-2"><span className="mr-1 text-xs font-bold text-stone-500">{label}</span>{values.map((item) => <button key={item} onClick={() => onChange(item)} className={`rounded-full px-3 py-1.5 text-sm transition ${value === item ? 'bg-amber-300 text-[#321b0f] font-bold' : 'bg-white/5 text-stone-300 hover:bg-white/10'}`}>{item}</button>)}</div>;
+}
 
-                  <div className="relative z-10">
-                    <div className="flex justify-between items-start mb-6">
-                      <span className="bg-zinc-800 text-gray-300 text-xs px-2 py-1 rounded font-mono uppercase border border-zinc-700">
-                        {generatedFood.category}
-                      </span>
-                      <span className="text-yellow-500 font-bold text-xs flex items-center gap-1">
-                        <Flame size={12} className="fill-yellow-500" /> {generatedFood.budget}
-                      </span>
-                    </div>
+function DishCard({ dish, favorite, onFavorite, onSelect }: { dish: FoodItem; favorite: boolean; onFavorite: () => void; onSelect: () => void }) {
+  return <article className="dish-card relative overflow-hidden rounded-3xl border border-amber-100/10 bg-[#251914] p-5 shadow-lg shadow-black/15 hover:border-amber-200/30">
+    <button onClick={onFavorite} aria-label={favorite ? `取消收藏 ${dish.name}` : `收藏 ${dish.name}`} className="absolute right-4 top-4 rounded-full p-2 text-stone-500 hover:bg-white/10 hover:text-rose-200"><Heart size={17} fill={favorite ? 'currentColor' : 'none'} className={favorite ? 'text-rose-300' : ''} /></button>
+    <button onClick={onSelect} className="w-full text-left"><div className="mb-5 flex items-center gap-3"><span className="grid h-12 w-12 place-items-center rounded-2xl bg-amber-100/10 text-2xl">{dish.emoji}</span><div><h2 className="font-serif text-xl font-black text-[#fff4e5]">{dish.name}</h2><p className="mt-1 text-xs text-stone-500">{dish.category}</p></div></div><p className="min-h-12 text-sm leading-6 text-stone-300">{dish.description}</p><div className="mt-5 flex items-center justify-between"><span className={`rounded-full px-2.5 py-1 text-xs font-bold ring-1 ${budgetStyle[dish.budget]}`}>{dish.budget}</span><strong className="text-lg text-amber-200">¥{dish.price}</strong></div></button>
+  </article>;
+}
 
-                    <h2 className="text-4xl font-black mb-4 text-white tracking-tight leading-tight min-h-[80px] flex items-center">
-                      {generatedFood.name}
-                    </h2>
-
-                    <p className="text-gray-400 mb-8 text-lg border-l-2 border-zinc-700 pl-4">
-                      {generatedFood.description}
-                    </p>
-
-                    {/* AI Commentary */}
-                    {!isSpinning && (
-                      <div className="mt-4 p-4 bg-black rounded-lg border border-zinc-800 relative">
-                        <div className="absolute -top-3 left-4 bg-rockets-red text-white text-[10px] font-bold px-2 py-0.5 rounded uppercase">
-                          Harden Analysis
-                        </div>
-                        <p className="text-gray-300 italic text-sm pt-2 leading-relaxed">
-                          "{hardenComment || "哈登正在思考战术..."}"
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div className="text-center text-gray-600 py-12 border-2 border-dashed border-zinc-800 rounded-2xl bg-zinc-900/30 flex flex-col items-center justify-center h-full">
-                <Utensils size={48} className="mb-4 opacity-20" />
-                <p className="font-bold text-lg text-gray-500">还不知道吃啥？</p>
-                <p className="text-sm">点击下方按钮，让哈登帮你选</p>
-              </div>
-            )}
-          </div>
-
-          {/* Action Button */}
-          <button 
-            onClick={handleRandomize}
-            disabled={isSpinning}
-            className="w-full bg-white text-black text-xl font-black py-4 rounded-xl shadow-[0_0_20px_rgba(255,255,255,0.2)] hover:bg-gray-200 active:scale-95 transition-all flex items-center justify-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed uppercase tracking-tighter"
-          >
-            {isSpinning ? (
-              <><RefreshCw className="animate-spin" /> 战术跑位中...</>
-            ) : (
-              <><Zap className="text-rockets-red fill-current" /> 随机生成饭单</>
-            )}
-          </button>
-
-          {/* Quick Select Grid (Manual) */}
-          <div className="pt-4">
-            <h3 className="text-gray-600 font-bold mb-3 text-xs uppercase tracking-widest flex items-center gap-2">
-               <Menu size={12}/> 替补席 (自己选)
-            </h3>
-            <div className="grid grid-cols-2 gap-2">
-               {NORTHERN_FOOD_MENU.slice(0, 4).map(food => (
-                 <button 
-                   key={food.id} 
-                   onClick={() => { setGeneratedFood(food); setHardenComment("自己选的菜，含着泪也要吃完！"); window.scrollTo({top:0, behavior:'smooth'}); }} 
-                   className="p-3 bg-zinc-900 border border-zinc-800 rounded-lg text-left text-sm text-gray-400 hover:text-white hover:border-gray-600 transition-colors truncate"
-                 >
-                   {food.name}
-                 </button>
-               ))}
-               <button onClick={() => alert("更多菜品还在开发中，先随机吧！")} className="p-3 bg-zinc-900 border border-dashed border-zinc-800 rounded-lg text-center text-sm text-gray-600 hover:text-white transition-colors">
-                  + 更多
-               </button>
-            </div>
-          </div>
-
-        </main>
-
-        {/* --- Footer Sticky Area (Valorant + Tools) --- */}
-        <div className="bg-zinc-950 border-t border-zinc-900 p-4 sticky bottom-0 z-40 pb-safe">
-           <div className="bg-zinc-900 rounded-xl p-4 border border-zinc-800 shadow-xl relative overflow-hidden">
-              
-              {/* Valorant Section */}
-              <div className="flex items-center justify-between mb-4 relative z-10">
-                 <div className="flex items-center gap-3">
-                    <div className="bg-red-500/10 p-2 rounded-lg">
-                        <Gamepad2 className="text-rockets-red" size={24} />
-                    </div>
-                    <div>
-                        <div className="font-bold text-white text-base">带我打瓦</div>
-                        <div className="text-xs text-gray-500">国服/国际服均可</div>
-                    </div>
-                 </div>
-                 
-                 <div className="flex items-center gap-2 bg-black px-3 py-2 rounded-lg border border-zinc-700">
-                    <span className="text-gray-300 font-mono text-sm tracking-wide select-all">{QQ_NUMBER}</span>
-                    <div className="w-px h-4 bg-gray-700 mx-1"></div>
-                    <button 
-                      onClick={copyQQ}
-                      className="text-rockets-red hover:text-white transition-colors text-xs font-bold uppercase"
-                    >
-                      {copyFeedback}
-                    </button>
-                 </div>
-              </div>
-
-              {/* Tools Section */}
-              <div className="grid grid-cols-2 gap-3 relative z-10">
-                <button onClick={() => setInstallModalOpen(true)} className="bg-zinc-800 hover:bg-zinc-700 text-gray-300 text-xs py-2.5 rounded-lg flex items-center justify-center gap-2 transition-colors font-medium">
-                   <Info size={14} /> 如何安装到手机
-                </button>
-                <button onClick={() => setFeedbackModalOpen(true)} className="bg-zinc-800 hover:bg-zinc-700 text-gray-300 text-xs py-2.5 rounded-lg flex items-center justify-center gap-2 transition-colors font-medium">
-                   <MessageSquare size={14} /> 意见反馈
-                </button>
-              </div>
-
-           </div>
-        </div>
-
-      </div>
-
-      {/* --- Right Sidebar (Desktop) --- */}
-      <div className="hidden md:flex flex-col justify-end w-80 bg-zinc-950 border-l border-zinc-900 p-8 sticky top-0 h-screen text-right z-10">
-         <div className="opacity-10 mb-auto mt-12 flex justify-end select-none pointer-events-none">
-           <Utensils size={180} />
-         </div>
-         <div>
-          <h2 className="text-4xl font-display font-black italic text-white mb-1">FEAR THE</h2>
-          <h2 className="text-6xl font-display font-black italic text-rockets-red mb-8">BEARD</h2>
-          <div className="space-y-4 text-gray-500 text-sm font-medium">
-            <p>不要在吃饭的时候犹豫</p>
-            <p>就像不要在空位的时候传球</p>
-            <p className="pt-4 text-xs text-zinc-700">© HAHA DENG KITCHEN v1.0</p>
-          </div>
-        </div>
-      </div>
-
-      {/* Modals */}
-      <InstallationGuide isOpen={isInstallModalOpen} onClose={() => setInstallModalOpen(false)} />
-      <FeedbackModal isOpen={isFeedbackModalOpen} onClose={() => setFeedbackModalOpen(false)} />
-
-    </div>
-  );
+function PickModal({ dish, favorite, onClose, onFavorite, onAgain }: { dish: FoodItem; favorite: boolean; onClose: () => void; onFavorite: () => void; onAgain: () => void }) {
+  return <div role="dialog" aria-modal="true" aria-label="今日推荐" className="fixed inset-0 z-40 grid place-items-center bg-black/70 p-4 backdrop-blur-sm" onMouseDown={onClose}><section className="w-full max-w-md rounded-[2rem] border border-amber-200/20 bg-[#2a1a14] p-7 text-center shadow-2xl" onMouseDown={(event) => event.stopPropagation()}><div className="mx-auto mb-4 grid h-20 w-20 place-items-center rounded-3xl bg-amber-100/10 text-4xl">{dish.emoji}</div><p className="text-xs font-bold tracking-[.2em] text-amber-300">TODAY'S PICK</p><h2 className="mt-2 font-serif text-4xl font-black text-[#fff4e5]">{dish.name}</h2><p className="mt-4 leading-7 text-stone-300">{dish.description}</p><div className="mt-6 flex items-center justify-center gap-2"><span className={`rounded-full px-3 py-1 text-xs font-bold ring-1 ${budgetStyle[dish.budget]}`}>{dish.budget}</span><strong className="text-xl text-amber-200">¥{dish.price}</strong></div><div className="mt-7 grid grid-cols-2 gap-3"><button onClick={onFavorite} className="rounded-2xl border border-white/10 py-3 text-sm font-bold text-stone-200 hover:bg-white/5"><Heart className="mr-1 inline" size={16} fill={favorite ? 'currentColor' : 'none'} /> {favorite ? '已收藏' : '收藏它'}</button><button onClick={onAgain} className="rounded-2xl bg-amber-300 py-3 text-sm font-black text-[#30190f] hover:bg-amber-200"><Sparkles className="mr-1 inline" size={16} /> 换一道</button></div><button onClick={onClose} className="mt-5 text-sm text-stone-500 hover:text-stone-300">回到菜单</button></section></div>;
 }
